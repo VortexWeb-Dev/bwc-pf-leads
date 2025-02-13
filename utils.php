@@ -1,39 +1,71 @@
 <?php
 
-function extractDetails($body)
+function extractDetails($body, $type = 'email')
 {
     $details = [];
 
-    if (preg_match('/Agent:\s*([^\n]+)/', $body, $matches)) {
-        $details['agent_name'] = trim($matches[1]);
-    }
+    if ($type === 'email') {
+        if (preg_match('/Agent:\s*([^\n]+)/', $body, $matches)) {
+            $details['agent_name'] = trim($matches[1]);
+        }
 
-    if (preg_match('/You can respond to\s+([^\n]+?)\s+calling or emailing on:[\s\S]*?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/', $body, $matches)) {
-        $details['client_name'] = trim($matches[1]);
-        $details['client_email'] = trim($matches[2]);
-    }
+        if (preg_match('/You can respond to\s+([^\n]+?)\s+calling or emailing on:[\s\S]*?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/', $body, $matches)) {
+            $details['client_name'] = trim($matches[1]);
+            $details['client_email'] = trim($matches[2]);
+        }
 
-    if (preg_match('/\+(\d{12}|\d{11})/', $body, $matches)) {
-        $details['client_phone'] = '+' . $matches[1];
-    }
+        if (preg_match('/\+(\d{12}|\d{11})/', $body, $matches)) {
+            $details['client_phone'] = '+' . $matches[1];
+        }
 
-    if (preg_match('/Reference:\s*([A-Za-z0-9-_]+)/', $body, $matches)) {
-        $details['property_reference'] = trim($matches[1]);
-    }
+        if (preg_match('/([\d,]+)\s*AED/', $body, $matches)) {
+            $details['property_price'] = str_replace(',', '', $matches[1]);
+        }
 
-    if (preg_match('/(\d{1,3}(?:,\d{3})*)\s*AED\s*-/', $body, $matches)) {
-        $details['property_price'] = str_replace(',', '', $matches[1]);
-    }
+        if (preg_match('/(Apartment|Villa)\s*-\s*(\d+)\s*🛏\s*(\d+)\s*🛁\s*-\s*([\d,]+)\s*sqft/', $body, $matches)) {
+            $details['property_type'] = $matches[1];
+            $details['bedrooms'] = $matches[2];
+            $details['bathrooms'] = $matches[3];
+            $details['property_size'] = str_replace(',', '', $matches[4]);
+        }
 
-    if (preg_match('/(?:Villa|Apartment)\s*-\s*(\d+)\s*(?:\[.*?\])?\s*(\d+)\s*(?:\[.*?\])?\s*-\s*(\d+(?:,\d{3})*)\s*sqft/', $body, $matches)) {
-        $details['property_type'] = strpos($body, 'Villa') !== false ? 'Villa' : 'Apartment';
-        $details['bedrooms'] = $matches[1];
-        $details['bathrooms'] = $matches[2];
-        $details['property_size'] = str_replace(',', '', $matches[3]);
-    }
+        if (preg_match('/Reference:\s*([\w-]+)/', $body, $matches)) {
+            $details['property_reference'] = trim($matches[1]);
+        }
 
-    if (preg_match('/((?:Furnished|Huge Balcony|Sea View|Lagoon View|Great Community|Ready to Move In|High Floor|Bills Included|Upgraded|VACANT|WELL MAINTAINED|UNFURNISHED|Open Layout|DIFC View|Close to Metro)(?:\s*\|\s*(?:Furnished|Huge Balcony|Sea View|Lagoon View|Great Community|Ready to Move In|High Floor|Bills Included|Upgraded|VACANT|WELL MAINTAINED|UNFURNISHED|Open Layout|DIFC View|Close to Metro))*)/', $body, $matches)) {
-        $details['property_features'] = trim($matches[1]);
+        if (preg_match('/((?:Open Layout|DIFC View|Close to Metro|Furnished|Huge Balcony|Sea View|Lagoon View|Great Community|Ready to Move In|High Floor|Bills Included|Upgraded|VACANT|WELL MAINTAINED|UNFURNISHED)(?:\s*\|\s*(?:Open Layout|DIFC View|Close to Metro|Furnished|Huge Balcony|Sea View|Lagoon View|Great Community|Ready to Move In|High Floor|Bills Included|Upgraded|VACANT|WELL MAINTAINED|UNFURNISHED))*)/', $body, $matches)) {
+            $details['property_features'] = trim($matches[1]);
+        }
+    } else if ($type === 'call') {
+        if (preg_match('/Dear\s+([^,\n]+)/', $body, $matches)) {
+            $details['agent_name'] = trim($matches[1]);
+        }
+
+        if (preg_match('/\+(\d{12}|\d{11})/', $body, $matches)) {
+            $details['client_phone'] = '+' . $matches[1];
+        }
+
+        if (preg_match('/Call start\s*:\s*([\d-]+T[\d:]+Z)/', $body, $matches)) {
+            $details['call_start'] = trim($matches[1]);
+        }
+
+        if (preg_match('/Call end\s*:\s*([\d-]+T[\d:]+Z)/', $body, $matches)) {
+            $details['call_end'] = trim($matches[1]);
+        }
+
+        if (preg_match('/Talk time\s*:\s*(\d+s)/', $body, $matches)) {
+            $details['talk_time'] = trim($matches[1]);
+        }
+
+        if (preg_match('/Waiting time\s*:\s*(\d+s)/', $body, $matches)) {
+            $details['waiting_time'] = trim($matches[1]);
+        }
+
+        if (isset($details['call_start']) && isset($details['call_end'])) {
+            $start = new DateTime($details['call_start']);
+            $end = new DateTime($details['call_end']);
+            $details['duration_seconds'] = $end->getTimestamp() - $start->getTimestamp();
+        }
     }
 
     return $details;
